@@ -25,10 +25,7 @@ def create_inline_keyboad_in_list(data:list) -> InlineKeyboardBuilder:
 
 def create_inline_keyboard_multiple_choice(data: dict) -> InlineKeyboardBuilder:
     """Функция для генерации инлайн клавиатуры для множественного выбора"""
-    # Инициализируем билдер
     keyboard: InlineKeyboardBuilder = InlineKeyboardBuilder()
-    # Добавляем в билдер кнопки
     for name, part in data.items():
         keyboard.row(InlineKeyboardButton(text= f"{name} {part}", callback_data=name))
-    # Возвращаем объект инлайн-клавиатуры
     return keyboard.as_markup(resize_keyboard=True)
