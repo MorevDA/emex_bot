@@ -69,7 +69,7 @@ def get_original_parts_string(parts_list: dict, sorting_option='Цена, руб
     return result
 
 
-def get_info_for_message(input_dict: dict, sort_method='Цена, руб.: ') -> list | dict:
+def get_info_for_message(input_dict: object, sort_method='Цена, руб.: ') -> list | dict:
     first_strings = ['Аналоги других производителей:', 'Замены того же производителя:']
     match input_dict:
         case {'suggestions': sus}:
