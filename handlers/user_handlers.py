@@ -6,9 +6,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from keyboards.users_kb import create_inline_keyboard_dict, create_inline_keyboard_multiple_choice
+from keyboards.users_kb import (create_inline_keyboard_dict, create_inline_keyboard_multiple_choice,
+                                create_inline_keyboard_in_list)
 from lexicon.lexicon import LEXICON
-from lexicon.filials import area, points, points_id
+from lexicon.filials import points, points_id
 from database.database import users_db
 from service.pars_emex import sorting_options
 from service.scrap_emex import (get_search_result, base_search_url, alter_search_url, headers_search, params_search,
@@ -49,18 +50,19 @@ async def process_start_command(message: Message):
 @router.message(Command(commands='select_pick_point'), StateFilter(default_state))
 async def process_select_pick_points(message: Message, state: FSMContext):
     await message.answer(text=LEXICON[message.text],
-                         reply_markup=create_inline_keyboard_dict(area))
+                         reply_markup=create_inline_keyboard_in_list(points.keys()))
     await state.set_state(FSMFilial.fill_area)
 
 
 # Этот хэндлер будет срабатывать на результат выбора района и
 # переводить бота в состояние ожидания выбора пункта
-@router.callback_query(StateFilter(FSMFilial.fill_area), Text(text=list(area.values())))
+@router.callback_query(StateFilter(FSMFilial.fill_area), Text(text=list(points.keys())))
 async def process_point_choice(callback: CallbackQuery, state: FSMContext):
     # Сохраняем данные о выбранном районе по ключу "area"
     await state.update_data(area=callback.data)
     user_id = callback.from_user.id
     district = callback.data
+    print(district)
     users_db[user_id] = {'district': district}
     await callback.message.edit_text(text=LEXICON['pickup_point'],
                                      reply_markup=create_inline_keyboard_dict(points[district]))
@@ -71,20 +73,17 @@ async def process_point_choice(callback: CallbackQuery, state: FSMContext):
 @router.message(StateFilter(FSMFilial.fill_area))
 async def warning_not_area(message: Message):
     await message.answer(text= LEXICON['select_district'],
-                                     reply_markup=create_inline_keyboard_dict(area))
+                                     reply_markup=create_inline_keyboard_in_list(points.keys()))
 
 
 # Этот хэндлер будет срабатывать на результат выбора района и
 # переводить бота в состояние ожидания выбора пункта выдачи
 @router.callback_query(StateFilter(FSMFilial.fill_filial), Text(text=points_id))
 async def process_point_choice(callback: CallbackQuery, state: FSMContext):
-    # Сохраняем данные о точке выдачи по ключу "pick_point"
-    await state.update_data(pick_point=callback.data)
-    # добавляем в базу данных информацию о данных выбранных пользователем
-    # район и пункт выдачи
-    users_db[callback.from_user.id] = await state.get_data()
-    # Завершаем машину состояний
-    await state.clear()
+    await state.update_data(pick_point=callback.data) # Сохраняем данные о точке выдачи по ключу "pick_point"
+    users_db[callback.from_user.id] = await state.get_data() # добавляем в базу данных информацию о данных выбранных
+    # пользователем  район и пункт выдачи
+    await state.clear() # Завершаем машину состояний
     await callback.message.edit_text(text= LEXICON['select_point_complete'],
                                      reply_markup=create_inline_keyboard_dict(sorting_options))
 
@@ -103,7 +102,6 @@ async def warning_not_area(message: Message):
 async def change_sort_param(message: Message):
     if message.from_user.id in users_db:
         await message.answer(text=LEXICON['/change_sort_param'],
-
                              reply_markup=create_inline_keyboard_dict(sorting_options))
     else:
         await message.answer(text=LEXICON['not_in_db'])
@@ -168,14 +166,18 @@ async def start_search(message: Message):
 
 @router.callback_query(Text)
 async def start_alter_search(callback: CallbackQuery):
-    alter_params_search['make'] = callback.data.lower()
-    alter_params_search['detailNum'] = users_db[callback.from_user.id]['part']
-    alter_params_search['locationId'] = users_db[callback.from_user.id]['pick_point']
-    alter_result: object = get_search_result(alter_search_url, headers_search, alter_params_search)
-    sort_params = users_db[callback.from_user.id]['sort_method']
-    res_search = get_info_for_message(alter_result, sort_params)
-    await callback.answer(
-        text="Идет поиск информации, это может занять некоторое время.",
-        show_alert=True)
-    for msg in res_search:
-        await callback.message.answer(text=msg)
+    user_id = callback.from_user.id
+    try:
+        alter_params_search['make'] = callback.data.lower()
+        alter_params_search['detailNum'] = users_db[user_id]['part']
+        alter_params_search['locationId'] = users_db[user_id]['pick_point']
+        alter_result: object = get_search_result(alter_search_url, headers_search, alter_params_search)
+        sort_params = users_db[user_id]['sort_method']
+        res_search = get_info_for_message(alter_result, sort_params)
+        await callback.answer(
+            text="Идет поиск информации, это может занять некоторое время.",
+            show_alert=True)
+        for msg in res_search:
+            await callback.message.answer(text=msg)
+    except:
+        await callback.message.answer(text=LEXICON['not_in_db'])
