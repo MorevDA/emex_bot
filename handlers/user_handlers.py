@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from keyboards.users_kb import (create_inline_keyboard_dict, create_inline_keyboard_multiple_choice,
                                 create_inline_keyboard_in_list)
 from lexicon.lexicon import LEXICON
-from lexicon.filials import points, points_id
+from lexicon.filials import points, points_name
 from database.database import users_db
 from service.pars_emex import sorting_options
 from service.scrap_emex import (get_search_result, base_search_url, alter_search_url, headers_search, params_search,
@@ -42,7 +42,9 @@ async def process_start_command(message: Message):
     if message.from_user.id not in users_db:
         await message.answer(text=LEXICON['/start'])
     else:
-        await message.answer(text=LEXICON['old_user'])
+        point = users_db[message.from_user.id]['pick_point_name']
+        msg = LEXICON['old_user'].format(point)
+        await message.answer(text=msg)
 
 
 # Этот хэндлер будет срабатывать на команду "/select_pick_point" - отправлять сообщение
@@ -64,7 +66,7 @@ async def process_point_choice(callback: CallbackQuery, state: FSMContext):
     district = callback.data
     users_db[user_id] = {'district': district}
     await callback.message.edit_text(text=LEXICON['pickup_point'],
-                                     reply_markup=create_inline_keyboard_dict(points[district]))
+                                     reply_markup=create_inline_keyboard_in_list(points[district].keys()))
     await state.set_state(FSMFilial.fill_filial)
 
 
@@ -77,9 +79,12 @@ async def warning_not_area(message: Message):
 
 # Этот хэндлер будет срабатывать на результат выбора района и
 # переводить бота в состояние ожидания выбора пункта выдачи
-@router.callback_query(StateFilter(FSMFilial.fill_filial), Text(text=points_id))
+@router.callback_query(StateFilter(FSMFilial.fill_filial), Text(text=points_name))
 async def process_point_choice(callback: CallbackQuery, state: FSMContext):
-    await state.update_data(pick_point=callback.data)  # Сохраняем данные о точке выдачи по ключу "pick_point"
+    pick_point_name = callback.data
+    pick_point_id = points[users_db[callback.from_user.id]['district']][pick_point_name]
+    await state.update_data(pick_point=pick_point_id, pick_point_name=pick_point_name)  # Сохраняем в базе данных
+    # информацию об адресе и идентификаторе точки выдачи по ключам "pick_point_name" и "pick_point" соответственно
     users_db[callback.from_user.id] = await state.get_data()  # добавляем в базу данных информацию о данных выбранных
     # пользователем район и пункт выдачи
     await state.clear()  # Завершаем машину состояний
@@ -90,9 +95,9 @@ async def process_point_choice(callback: CallbackQuery, state: FSMContext):
 # Этот хэндлер будет срабатывать, если во время выбора пункта выдачи будет введено что-то некорректное
 @router.message(StateFilter(FSMFilial.fill_filial))
 async def warning_not_area(message: Message):
-    user_district = users_db[message.from_user.id]['district']
+    district = users_db[message.from_user.id]['district']
     await message.answer(text=LEXICON['select_pick_point'],
-                         reply_markup=create_inline_keyboard_dict(points[user_district]))
+                         reply_markup=create_inline_keyboard_in_list(points[district].keys()))
 
 
 # Этот хэндлер срабатывает на отправку команды изменения параметров сортировки
